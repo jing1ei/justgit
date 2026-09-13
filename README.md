@@ -13,6 +13,7 @@ Run `./Build.command --check` to build and test without installing.
 On Windows, install Python 3.11+ (including Tcl/Tk) and Git for Windows on PATH,
 then double-click `Run-Windows.cmd`. It can also accept a repository folder.
 Setup and Skin are in the menu bar on both platforms, not the main panel.
+The macOS app is menu bar only; see Use below.
 
 Windows checks: `powershell -File Windows/Build.ps1 -Check`.
 Optional portable EXE: install PyInstaller, then run
@@ -39,6 +40,12 @@ app until the user right-clicks it and chooses Open (or clears the quarantine
 attribute), and Windows SmartScreen warns on first run.
 
 ## Use
+
+On macOS JustGit is a menu bar app: it has no Dock icon and no main window.
+Click the menu bar icon to show the panel, click again to hide it. Right-click
+(or control-click) the icon for Show Panel, Setup, Skin and Quit. The icon shows
+the open repository's name. Quitting is only from that menu — closing the panel
+leaves JustGit running. Windows is unchanged and still uses a normal window.
 
 Open or drop a folder. Commit stages all changes; an empty message uses the date.
 Push and Pull target the current branch on `origin`. Sync commits, pulls, then

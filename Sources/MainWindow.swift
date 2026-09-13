@@ -487,8 +487,10 @@ final class MainController: NSObject, NSWindowDelegate {
 
     private func paint(verbose: Bool) {
         guard let g = git else { return }
-        window.title = "JustGit — " + (g.path as NSString).lastPathComponent
+        let name = (g.path as NSString).lastPathComponent
+        window.title = "JustGit — " + name
         window.representedFilename = g.path
+        onRepoChange?(name)
         changesView.string = st.error.isEmpty
             ? (st.isRepo ? (st.shortStatus.isEmpty ? "Working tree clean" : st.shortStatus) : "Not a Git repository")
             : st.error
@@ -982,14 +984,23 @@ final class MainController: NSObject, NSWindowDelegate {
 
     @objc func openSkin() { SkinWindow.shared.show() }
 
-    // refresh whenever the user comes back to the window — files change behind our back
-    func windowDidBecomeKey(_ n: Notification) {
+    /// The panel view. The menu bar popover hosts this instead of the window.
+    var contentRoot: NSView { root }
+
+    /// Called when the repository changes, so the status item can name it.
+    var onRepoChange: ((String?) -> Void)?
+
+    /// The panel became visible; files may have changed behind our back.
+    func panelDidAppear() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self, !self.busy, self.git != nil, NSApp.modalWindow == nil else { return }
             self.setBusy(true)
             self.refresh { self.setBusy(false) }
         }
     }
+
+    // refresh whenever the user comes back to the window — files change behind our back
+    func windowDidBecomeKey(_ n: Notification) { panelDidAppear() }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if busy {

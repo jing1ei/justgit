@@ -14,14 +14,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pendingFolder = nil
             c.open(folder)
         }
-        c.window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        MenuBarController.shared.install(main: c)
+        MenuBarController.shared.open()
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { true }
+    // The panel is a popover, not a window: closing it must not quit the app.
+    func applicationShouldTerminateAfterLastWindowClosed(_ s: NSApplication) -> Bool { false }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        main?.window.makeKeyAndOrderFront(nil)
+        MenuBarController.shared.open()
         return true
     }
 
@@ -37,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sender.reply(toOpenOrPrint: .failure)
             return
         }
-        if let main = main { main.open(dir) }
+        if let main = main { main.open(dir); MenuBarController.shared.open() }
         else { pendingFolder = dir }
         sender.reply(toOpenOrPrint: .success)
     }
@@ -96,5 +97,5 @@ if SelfTest.headless { SelfTest.run() }
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
-app.setActivationPolicy(.regular)
+app.setActivationPolicy(.accessory)   // menu bar only: no Dock icon
 app.run()

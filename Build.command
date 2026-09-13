@@ -86,6 +86,7 @@ make_app() {
   <key>CFBundleVersion</key><string>${BUILD_NUMBER}</string>
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>LSUIElement</key><true/>
   <key>NSDesktopFolderUsageDescription</key><string>JustGit runs git in the folder you pick.</string>
   <key>NSDocumentsFolderUsageDescription</key><string>JustGit runs git in the folder you pick.</string>
   <key>NSDownloadsFolderUsageDescription</key><string>JustGit runs git in the folder you pick.</string>

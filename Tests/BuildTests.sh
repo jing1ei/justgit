@@ -66,6 +66,7 @@ check test -x "$PKG/JustGit.app/Contents/MacOS/JustGit"
 check cmp "$ROOT/LICENCE" "$PKG/JustGit.app/Contents/Resources/LICENCE"
 check grep -q "<string>9.9</string>" "$PKG/JustGit.app/Contents/Info.plist"
 check grep -q "<string>42</string>" "$PKG/JustGit.app/Contents/Info.plist"
+check grep -q "<key>LSUIElement</key><true/>" "$PKG/JustGit.app/Contents/Info.plist"
 check test ! -e "$HOME/Applications/JustGit.app"
 if run_build --package; then
   printf 'FAIL --package without a directory was accepted\n' >&2
