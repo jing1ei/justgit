@@ -1,0 +1,7 @@
+.DS_Store
+*.profraw
+/.justgit-build.*
+/.justgit-*.log
+__pycache__/
+*.pyc
+/Windows/releases/

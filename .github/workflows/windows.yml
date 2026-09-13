@@ -1,0 +1,29 @@
+name: Windows checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Git workflow regressions
+        run: python -m unittest discover -s Windows -p "test_*.py" -v
+      - name: Native window smoke test
+        run: python Windows/app.py --smoke-test
+      - name: Install packaging tool
+        run: python -m pip install pyinstaller
+      - name: Package portable Windows app
+        shell: pwsh
+        run: ./Windows/Build.ps1 -Package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JustGit-Windows
+          path: Windows/releases/
