@@ -20,6 +20,24 @@ Optional portable EXE: install PyInstaller, then run
 Git is still required; packaged copies do not require Python.
 The Windows CI workflow runs tests and creates a downloadable build artifact.
 
+## Releases
+
+Tag a commit and push the tag; GitHub Actions builds both platforms and publishes
+the release with the two archives attached.
+
+    git tag v2.2
+    git push origin v2.2
+
+The tag sets the version: `v2.2` becomes `CFBundleShortVersionString` 2.2. Running
+the Release workflow manually builds and uploads artifacts but publishes nothing.
+`./Build.command --package <dir>` produces `JustGit.app` locally the same way CI
+does — a universal arm64 + x86_64 binary, installing and launching nothing.
+
+Released builds are not signed with an Apple Developer ID or notarised, and the
+Windows executable is unsigned. macOS Gatekeeper therefore blocks the downloaded
+app until the user right-clicks it and chooses Open (or clears the quarantine
+attribute), and Windows SmartScreen warns on first run.
+
 ## Use
 
 Open or drop a folder. Commit stages all changes; an empty message uses the date.

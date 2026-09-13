@@ -10,6 +10,13 @@ mkdir -p "$HOME"
 # Exercise installation control flow with an inert binary and no GUI launch.
 xcrun() {
   if [ "${1:-}" = "--find" ]; then return 0; fi
+  if [ "${1:-}" = "lipo" ]; then
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = "-output" ]; then /bin/cp /usr/bin/true "$2"; return; fi
+      shift
+    done
+    return 1
+  fi
   while [ "$#" -gt 0 ]; do
     if [ "$1" = "-o" ]; then /bin/cp /usr/bin/true "$2"; return; fi
     shift
@@ -51,6 +58,19 @@ if run_build --unknown; then
   exit 1
 fi
 check test ! -e "$HOME/Applications/JustGit.app"
+
+# --package emits a bundle without installing or launching anything.
+PKG="$BASE/pkg"
+JUSTGIT_VERSION=9.9 JUSTGIT_BUILD=42 check run_build --package "$PKG"
+check test -x "$PKG/JustGit.app/Contents/MacOS/JustGit"
+check cmp "$ROOT/LICENCE" "$PKG/JustGit.app/Contents/Resources/LICENCE"
+check grep -q "<string>9.9</string>" "$PKG/JustGit.app/Contents/Info.plist"
+check grep -q "<string>42</string>" "$PKG/JustGit.app/Contents/Info.plist"
+check test ! -e "$HOME/Applications/JustGit.app"
+if run_build --package; then
+  printf 'FAIL --package without a directory was accepted\n' >&2
+  exit 1
+fi
 
 mkdir -p "$HOME/Applications/JustGit.app"
 touch "$HOME/Applications/JustGit.app/previous"
