@@ -2,7 +2,14 @@ param([switch]$Check, [switch]$Package)
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
-if (Get-Command py -ErrorAction SilentlyContinue) {
+if ($env:JUSTGIT_PYTHON) {
+    # CI pins the exact interpreter so packages and the build never diverge.
+    $Python = $env:JUSTGIT_PYTHON
+    $Prefix = @()
+    if (-not (Get-Command $Python -ErrorAction SilentlyContinue)) {
+        throw "JUSTGIT_PYTHON is set to '$Python', which is not runnable."
+    }
+} elseif (Get-Command py -ErrorAction SilentlyContinue) {
     $Python = "py"
     $Prefix = @("-3")
 } elseif (Get-Command python -ErrorAction SilentlyContinue) {

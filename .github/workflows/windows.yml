@@ -12,16 +12,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        id: python
         with:
           python-version: "3.12"
-      - name: Git workflow regressions
-        run: python -m unittest discover -s Windows -p "test_*.py" -v
-      - name: Native window smoke test
-        run: python Windows/app.py --smoke-test
       - name: Install packaging tool
-        run: python -m pip install pyinstaller
-      - name: Package portable Windows app
+        run: ${{ steps.python.outputs.python-path }} -m pip install pyinstaller
+      # Build.ps1 -Package runs the unit tests and the UI smoke test before
+      # packaging, so running them as separate steps would only repeat them.
+      - name: Test, smoke-test and package
         shell: pwsh
+        env:
+          JUSTGIT_PYTHON: ${{ steps.python.outputs.python-path }}
         run: ./Windows/Build.ps1 -Package
       - uses: actions/upload-artifact@v4
         with:
