@@ -33,10 +33,13 @@ if ($Package) {
     }
     $Stage = Join-Path ([IO.Path]::GetTempPath()) ("justgit-package-" + [guid]::NewGuid())
     New-Item -ItemType Directory $Stage | Out-Null
+    # PyInstaller resolves a relative --add-data source against --specpath, not the
+    # working directory, so the licence has to be named absolutely.
+    $Licence = (Resolve-Path "LICENCE").Path
     try {
         & $Python @Prefix -m PyInstaller --noconfirm --clean --windowed --onedir --name JustGit `
             --distpath (Join-Path $Stage "dist") --workpath (Join-Path $Stage "work") `
-            --specpath $Stage --add-data "LICENCE;." Windows/app.py
+            --specpath $Stage --add-data "$Licence;." Windows/app.py
         if ($LASTEXITCODE -ne 0) { throw "Packaging failed." }
         $Release = Join-Path "Windows/releases" ("JustGit-" + (Get-Date -Format "yyyyMMdd-HHmmss") + "-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
         New-Item -ItemType Directory $Release -Force | Out-Null
