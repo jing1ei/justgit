@@ -1,0 +1,118 @@
+name: Release
+
+# Tag a commit to publish a release:  git tag v2.2 && git push origin v2.2
+# Running this manually builds and uploads artifacts but publishes nothing.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    name: Build macOS app
+    runs-on: macos-14
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive version
+        id: v
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then V="${GITHUB_REF_NAME#v}"; else V="0.0-dev"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Build, self-test and package (universal)
+        env:
+          JUSTGIT_VERSION: ${{ steps.v.outputs.version }}
+          JUSTGIT_BUILD: ${{ github.run_number }}
+        run: ./Build.command --package dist
+
+      - name: Verify both architectures are present
+        run: |
+          lipo -archs dist/JustGit.app/Contents/MacOS/JustGit
+          lipo -archs dist/JustGit.app/Contents/MacOS/JustGit | grep -q arm64
+          lipo -archs dist/JustGit.app/Contents/MacOS/JustGit | grep -q x86_64
+
+      - name: Installer checks
+        run: bash Tests/BuildTests.sh
+
+      - name: Zip the bundle
+        run: ditto -c -k --keepParent dist/JustGit.app "JustGit-macOS-${{ steps.v.outputs.version }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: JustGit-macOS-*.zip
+          if-no-files-found: error
+
+  windows:
+    name: Build Windows app
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: "3.12"
+
+      - name: Derive version
+        id: v
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then V="${GITHUB_REF_NAME#v}"; else V="0.0-dev"; fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Install packaging tool
+        run: ${{ steps.python.outputs.python-path }} -m pip install pyinstaller
+
+      - name: Test and package
+        shell: pwsh
+        env:
+          JUSTGIT_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: ./Windows/Build.ps1 -Package
+
+      - name: Zip the portable app
+        shell: pwsh
+        run: |
+          $dir = Get-ChildItem Windows/releases -Directory |
+                 Sort-Object LastWriteTime | Select-Object -Last 1
+          if (-not $dir) { throw "Build.ps1 produced no release folder." }
+          Compress-Archive -Path "$($dir.FullName)/*" `
+            -DestinationPath "JustGit-Windows-${{ steps.v.outputs.version }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: JustGit-Windows-*.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: [macos, windows]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "JustGit ${GITHUB_REF_NAME#v}" \
+            --generate-notes \
+            assets/*.zip
