@@ -1,0 +1,132 @@
+name: Release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      sha: ${{ steps.version.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate version and record commit
+        id: version
+        shell: bash
+        run: |
+          VERSION="1.0.0"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { echo "Use a version tag such as v1.0.0"; exit 1; }
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Test release publication logic
+        run: python3 .github/scripts/test_release.py
+      - name: Package source
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: git archive --format=zip --prefix="JustGit-$RELEASE_VERSION/" -o "JustGit-$RELEASE_VERSION-source.zip" HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JustGit-1.0.0-source
+          path: JustGit-${{ steps.version.outputs.version }}-source.zip
+          if-no-files-found: error
+
+  macos:
+    needs: prepare
+    name: Build macOS app
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: Build, test and package universal app
+        env:
+          JUSTGIT_VERSION: ${{ needs.prepare.outputs.version }}
+          JUSTGIT_BUILD: ${{ github.run_number }}
+        run: ./Build.command --package dist
+      - name: Verify deployment, architectures and signature
+        run: bash Tests/CompatibilityTests.sh dist/JustGit.app
+      - name: Installer and packaging rollback
+        run: bash Tests/BuildTests.sh
+      - name: Zip the bundle
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: ditto -c -k --keepParent dist/JustGit.app "JustGit-$RELEASE_VERSION-macOS-universal.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JustGit-1.0.0-macOS-universal
+          path: JustGit-${{ needs.prepare.outputs.version }}-macOS-universal.zip
+          if-no-files-found: error
+
+  windows:
+    needs: prepare
+    name: Build Windows app
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: "3.12"
+          architecture: x64
+      - name: Install packaging tool
+        shell: pwsh
+        env:
+          PYTHON_EXE: ${{ steps.python.outputs.python-path }}
+        run: |
+          & $env:PYTHON_EXE -m pip install -r Windows/requirements-build.txt
+          if ($LASTEXITCODE -ne 0) { throw "Packaging tool installation failed." }
+      - name: Test and package
+        shell: pwsh
+        env:
+          JUSTGIT_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: ./Windows/Build.ps1 -Package
+      - name: Zip the portable app
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $dirs = @(Get-ChildItem Windows/releases -Directory)
+          if ($dirs.Count -ne 1) { throw "Expected exactly one packaged application." }
+          Compress-Archive -Path "$($dirs[0].FullName)/*" -DestinationPath "JustGit-$env:RELEASE_VERSION-Windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JustGit-1.0.0-Windows-x64
+          path: JustGit-${{ needs.prepare.outputs.version }}-Windows-x64.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish 1.0.0
+    needs: [prepare, macos, windows]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: JustGit-1.0.0-*
+          merge-multiple: true
+          path: assets
+      - name: Publish verified packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/release.py assets

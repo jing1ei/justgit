@@ -1,0 +1,41 @@
+name: Windows checks
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+        python: ["3.11", "3.12"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: ${{ matrix.python }}
+          architecture: x64
+      - name: Install packaging tool
+        shell: pwsh
+        env:
+          PYTHON_EXE: ${{ steps.python.outputs.python-path }}
+        run: |
+          & $env:PYTHON_EXE -m pip install -r Windows/requirements-build.txt
+          if ($LASTEXITCODE -ne 0) { throw "Packaging tool installation failed." }
+      # Build.ps1 -Package runs the unit tests and the UI smoke test before
+      # packaging, so running them as separate steps would only repeat them.
+      - name: Test, smoke-test and package
+        shell: pwsh
+        env:
+          JUSTGIT_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: ./Windows/Build.ps1 -Package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JustGit-1.0.0-Windows-x64-${{ matrix.os }}-py${{ matrix.python }}
+          path: Windows/releases/
+          if-no-files-found: error
