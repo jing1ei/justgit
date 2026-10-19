@@ -1,0 +1,33 @@
+name: macOS checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, test and package universal app
+        env:
+          JUSTGIT_BUILD: ${{ github.run_number }}
+        run: ./Build.command --package "$RUNNER_TEMP/JustGit-package"
+      - name: Verify deployment, architectures and signature
+        run: bash Tests/CompatibilityTests.sh "$RUNNER_TEMP/JustGit-package/JustGit.app"
+      - name: Installer and packaging rollback
+        run: bash Tests/BuildTests.sh
+      - name: Zip the bundle
+        run: ditto -c -k --keepParent "$RUNNER_TEMP/JustGit-package/JustGit.app" "$RUNNER_TEMP/JustGit-macOS-universal.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JustGit-macOS-universal-${{ matrix.os }}-${{ github.sha }}
+          path: ${{ runner.temp }}/JustGit-macOS-universal.zip
+          if-no-files-found: error

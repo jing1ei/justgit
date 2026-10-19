@@ -1,0 +1,5 @@
+# actionlint configuration. GitHub-hosted labels newer than actionlint's
+# built-in list are declared here so the linter does not flag them.
+self-hosted-runner:
+  labels:
+    - macos-15-intel

@@ -1,0 +1,160 @@
+name: Tagged release
+
+# Builds signed-ad-hoc macOS (universal) and the portable Windows app from a
+# pushed semantic tag such as v1.2.3, then publishes a GitHub Release with the
+# app archives, the source archive and a SHA256 manifest. A tag only publishes
+# after every platform build and its tests pass; main-branch pushes never run
+# this, so day-to-day commits cannot cut a release.
+
+on:
+  push:
+    tags:
+      - "v[0-9]*.[0-9]*.[0-9]*"
+      - "v[0-9]*.[0-9]*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tagged-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  meta:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      prerelease: ${{ steps.ver.outputs.prerelease }}
+    steps:
+      - name: Resolve and validate version
+        id: ver
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          full="${tag#v}"
+          core="${full%%-*}"
+          [[ "$core" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] \
+            || { echo "Tag must look like v1.2.3 (optionally with a -prerelease suffix)"; exit 1; }
+          echo "version=$core" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$([ "$full" != "$core" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  macos:
+    needs: meta
+    name: Build macOS universal app
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, self-test and package universal app
+        env:
+          JUSTGIT_VERSION: ${{ needs.meta.outputs.version }}
+          JUSTGIT_BUILD: ${{ github.run_number }}
+        run: ./Build.command --package "$RUNNER_TEMP/JustGit-package"
+      - name: Verify deployment target, architectures and signature
+        run: bash Tests/CompatibilityTests.sh "$RUNNER_TEMP/JustGit-package/JustGit.app"
+      - name: Run installer and packaging rollback checks
+        run: bash Tests/BuildTests.sh
+      - name: Zip the bundle
+        run: >
+          ditto -c -k --keepParent
+          "$RUNNER_TEMP/JustGit-package/JustGit.app"
+          "JustGit-${{ needs.meta.outputs.version }}-macOS-universal.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JustGit-macOS
+          path: JustGit-${{ needs.meta.outputs.version }}-macOS-universal.zip
+          if-no-files-found: error
+
+  windows:
+    needs: meta
+    name: Build Windows portable app
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: "3.12"
+          architecture: x64
+      - name: Install packaging tool
+        shell: pwsh
+        env:
+          PYTHON_EXE: ${{ steps.python.outputs.python-path }}
+        run: |
+          & $env:PYTHON_EXE -m pip install -r Windows/requirements-build.txt
+          if ($LASTEXITCODE -ne 0) { throw "Packaging tool installation failed." }
+      # Build.ps1 -Package runs the unit tests, the UI smoke test and a frozen
+      # executable smoke test before producing the portable folder.
+      - name: Test, smoke-test and package
+        shell: pwsh
+        env:
+          JUSTGIT_PYTHON: ${{ steps.python.outputs.python-path }}
+        run: ./Windows/Build.ps1 -Package
+      - name: Zip the portable app
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.meta.outputs.version }}
+        run: |
+          $dirs = @(Get-ChildItem Windows/releases -Directory)
+          if ($dirs.Count -ne 1) { throw "Expected exactly one packaged application." }
+          Compress-Archive -Path "$($dirs[0].FullName)/*" `
+            -DestinationPath "JustGit-$env:VERSION-Windows-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JustGit-Windows
+          path: JustGit-${{ needs.meta.outputs.version }}-Windows-x64.zip
+          if-no-files-found: error
+
+  source:
+    needs: meta
+    name: Package source
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create source archive
+        run: >
+          git archive --format=zip
+          --prefix="JustGit-${{ needs.meta.outputs.version }}/"
+          -o "JustGit-${{ needs.meta.outputs.version }}-source.zip" HEAD
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JustGit-source
+          path: JustGit-${{ needs.meta.outputs.version }}-source.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: [meta, macos, windows, source]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: JustGit-*
+          merge-multiple: true
+          path: dist
+      - name: Assemble checksum manifest
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          zips=(dist/*.zip)
+          [ "${#zips[@]}" -eq 3 ] || { echo "Expected three release archives, got ${#zips[@]}"; exit 1; }
+          # Bare filenames in the manifest so it matches the uploaded asset names.
+          ( cd dist && sha256sum -- *.zip ) > dist/SHA256SUMS.txt
+          echo '--- SHA256SUMS.txt ---'
+          cat dist/SHA256SUMS.txt
+      - name: Create/update the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: JustGit ${{ needs.meta.outputs.version }}
+          prerelease: ${{ needs.meta.outputs.prerelease }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
