@@ -442,10 +442,13 @@ final class MainController: NSObject, NSWindowDelegate, NSTableViewDataSource, N
     private func rebuildRepositories() {
         updatingRepositories = true
         defer { updatingRepositories = false }
-        var paths = recents
+        let valid = Paths.validRecents(recents)
+        if valid != recents { recents = valid }
+        let membership = repositoryMembership.filter { valid.contains($0.key) && repositoryGroups.contains($0.value) }
+        if membership != repositoryMembership { repositoryMembership = membership }
+        var paths = valid
         if let path = git?.path, !paths.contains(path) { paths.append(path) }
         let groups = repositoryGroups
-        let membership = repositoryMembership
         listedRepositories = paths.filter { !groups.contains(membership[$0] ?? "") }
         for group in groups {
             listedRepositories.append(Self.groupPrefix + group)
@@ -571,7 +574,7 @@ final class MainController: NSObject, NSWindowDelegate, NSTableViewDataSource, N
             bad("Git is not installed. Open JustGit > Settings in the menu bar.")
         }
         if let last = defaults.string(forKey: "lastRepository").flatMap({ recents.contains($0) ? $0 : nil }) ?? recents.first, FileManager.default.fileExists(atPath: last) {
-            open(last, silent: true, verbose: true)
+            open(last, silent: true)
         } else {
             log("Pick the folder you want to work in.", .soft)
             // first launch: go straight to the folder picker, that is the whole point
@@ -582,7 +585,7 @@ final class MainController: NSObject, NSWindowDelegate, NSTableViewDataSource, N
         }
     }
 
-    func open(_ path: String, silent: Bool = false, verbose: Bool = false) {
+    func open(_ path: String, silent: Bool = false) {
         guard !busy else {
             pendingPath = path
             activityLabel.stringValue = loadingRepository
@@ -617,7 +620,7 @@ final class MainController: NSObject, NSWindowDelegate, NSTableViewDataSource, N
         loadingRepository = true
         setBusy(true)
         activityLabel.stringValue = "Opening \((dir as NSString).lastPathComponent)…"
-        refresh(verbose: verbose || !silent) { [weak self] in
+        refresh { [weak self] in
             guard let self = self, let g = self.git else { return }
             self.remember(g.path)               // the resolved toplevel, not the subfolder
             self.loadingRepository = false
@@ -645,14 +648,13 @@ final class MainController: NSObject, NSWindowDelegate, NSTableViewDataSource, N
 
     @objc private func refreshClicked() {
         guard !busy else { return }
-        section("Status")
         setBusy(true)
-        refresh(verbose: true) { [weak self] in self?.setBusy(false) }
+        refresh { [weak self] in self?.setBusy(false) }
     }
 
     /// Reads the repo off the main thread and paints the result on it. Replies
     /// for a repo the user has since navigated away from are discarded.
-    private func refresh(verbose: Bool = false, then: (() -> Void)? = nil) {
+    private func refresh(then: (() -> Void)? = nil) {
         guard let g = git else { then?(); return }
         refreshGeneration += 1
         let gen = refreshGeneration
@@ -669,15 +671,18 @@ final class MainController: NSObject, NSWindowDelegate, NSTableViewDataSource, N
                     return
                 }
                 // git reports the toplevel; adopt it so every later command runs there
-                if s.isRepo, !s.top.isEmpty, s.top != g.path { self.git = Git(s.top) }
+                if s.isRepo, !s.top.isEmpty, s.top != g.path {
+                    self.git = Git(s.top)
+                    if self.loadingRepository { self.msgField.stringValue = self.commitDrafts[s.top] ?? "" }
+                }
                 self.st = s
-                self.paint(verbose: verbose)
+                self.paint()
                 then?()
             }
         }
     }
 
-    private func paint(verbose: Bool) {
+    private func paint() {
         guard let g = git else { return }
         let name = (g.path as NSString).lastPathComponent
         window.title = "JustGit — " + name
@@ -737,11 +742,6 @@ final class MainController: NSObject, NSWindowDelegate, NSTableViewDataSource, N
             remoteLabel.stringValue = "origin  — none yet"
             remoteLabel.tone = .faint
         }
-
-        if verbose {
-            log(st.shortStatus.isEmpty ? "working tree clean" : st.shortStatus)
-            if !st.recentLog.isEmpty { log("\n" + st.recentLog, .soft) }
-        }
     }
 
     private func setEnabled(_ on: Bool) {
@@ -777,6 +777,7 @@ final class MainController: NSObject, NSWindowDelegate, NSTableViewDataSource, N
             completionMessage = nil
             activityLabel.stringValue = "Working…"
             activityLabel.tone = .soft
+            activityLabel.toolTip = nil
         } else if activityLabel.tone != .negative {
             activityLabel.stringValue = completionMessage.map { "✓ " + $0 } ?? "Ready"
             activityLabel.tone = completionMessage == nil ? .soft : .positive
@@ -1263,7 +1264,7 @@ final class MainController: NSObject, NSWindowDelegate, NSTableViewDataSource, N
         repoTitle.stringValue = (source.path as NSString).lastPathComponent
         repoTable.reloadData()
         repoTable.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
-        paint(verbose: false)
+        paint()
         detailSelector.selectedSegment = tab
         detailTabs.selectTabViewItem(at: tab)
         window.setContentSize(NSSize(width: 1060, height: 640))

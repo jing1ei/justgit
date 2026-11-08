@@ -574,6 +574,9 @@ class Settings:
 
     def save(self):
         self.recent = self.valid_paths(self.recent)
+        self.membership = {p: g for p, g in self.membership.items() if p in self.recent and g in self.groups}
+        if self.last_repository not in self.recent:
+            self.last_repository = ""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_name(self.path.name + "." + uuid4().hex + ".tmp")
         try:

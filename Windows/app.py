@@ -357,6 +357,8 @@ class App:
             if refresh and git is not None:
                 try:
                     state = git.state()
+                    if state.error:
+                        error = (error + "\n" if error else "") + state.error
                 except Exception as caught:
                     state = State(error="Refresh failed: " + str(caught))
                     error = (error + "\n" if error else "") + state.error
@@ -392,6 +394,7 @@ class App:
                     elif callback is not None:
                         callback(result)
                     if opening:
+                        self.rebuild_repositories()
                         self.transition.start()
         except queue.Empty:
             pass
@@ -401,12 +404,17 @@ class App:
         self.state = state
         self.guidance.set(state.guidance)
         if state.root and self.git:
+            if self.git.path != state.root:
+                self.message.set(self.commit_drafts.get(state.root, ""))
             self.git.path = state.root
             self.path.set(state.root)
-            self.settings.recent = Settings.valid_paths([*self.settings.recent, state.root])
-            self.settings.last_repository = state.root
-            self.rebuild_repositories()
-            self.save_settings()
+            recent = Settings.valid_paths([*self.settings.recent, state.root])
+            changed = recent != self.settings.recent or self.settings.last_repository != state.root
+            if changed:
+                self.settings.recent = recent
+                self.settings.last_repository = state.root
+                self.save_settings()
+                self.rebuild_repositories()
         self.root.title("JustGit" + (" - " + Path(self.git.path).name if self.git else ""))
         if state.error:
             self.branch.set("Repository unavailable")
@@ -433,7 +441,6 @@ class App:
         remote = state.remote
         if "://" in remote:
             try:
-                from urllib.parse import urlsplit, urlunsplit
                 parsed = urlsplit(remote)
                 # Strip any embedded userinfo (user:password@) without credentials.
                 host = parsed.hostname or ""

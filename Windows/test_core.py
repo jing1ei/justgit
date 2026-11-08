@@ -1,3 +1,4 @@
+import json
 """Run with: python -m unittest discover -s Windows -p test_*.py -v."""
 import os
 from pathlib import Path
@@ -46,6 +47,20 @@ class ParsingTests(unittest.TestCase):
             self.assertEqual(reread.skin, "Dark")
             settings.path.write_text("[]", encoding="utf-8")
             self.assertEqual(Settings(settings.path).recent, [])
+
+    def test_save_removes_stale_repository_metadata(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder).resolve()
+            settings = Settings(root / "settings.json")
+            gone = str(root / "gone")
+            settings.recent = [str(root), gone]
+            settings.groups = ["Work"]
+            settings.membership = {str(root): "Work", gone: "Work", "orphan": "Old"}
+            settings.last_repository = gone
+            settings.save()
+            saved = json.loads(settings.path.read_text())
+            self.assertEqual(saved["membership"], {str(root): "Work"})
+            self.assertEqual(saved["last_repository"], "")
 
     def test_process_deadline(self):
         start = time.monotonic()

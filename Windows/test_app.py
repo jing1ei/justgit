@@ -83,6 +83,29 @@ class FailureStateTests(unittest.TestCase):
             self.app.open_path(str(first))
             self.app.message.set.assert_called_with("Draft for first")
 
+    def test_returned_status_error_is_not_reported_as_success(self):
+        self.app.git.state.return_value = State(error="Repository unavailable")
+        self.app.submit("Refreshing", lambda: None)
+        self.finish()
+        self.app.activity.set.assert_called_with("Action stopped · see Activity")
+        self.app.log.assert_called_with("Repository unavailable")
+
+    def test_unchanged_status_does_not_write_settings_or_rebuild_sidebar(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder = str(Path(folder).resolve())
+            app = self.app
+            app.git.path = folder
+            app.settings = Settings(Path(folder) / "settings.json")
+            app.settings.recent = [folder]
+            app.settings.last_repository = folder
+            app.loading_repository = False
+            for name in ("path", "branch", "summary", "remote", "guidance",
+                         "save_settings", "rebuild_repositories", "replace_text"):
+                setattr(app, name, Mock())
+            App.display_state(app, State(root=folder, head="commit", branch="main"))
+            app.save_settings.assert_not_called()
+            app.rebuild_repositories.assert_not_called()
+
     def test_refresh_failure_displays_unavailable_state(self):
         self.app.git.state.side_effect = GitError("Permission denied")
         self.app.submit("Refreshing", lambda: None)
