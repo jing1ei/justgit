@@ -24,10 +24,15 @@ jobs:
         run: bash Tests/CompatibilityTests.sh "$RUNNER_TEMP/JustGit-package/JustGit.app"
       - name: Installer and packaging rollback
         run: bash Tests/BuildTests.sh
-      - name: Zip the bundle
-        run: ditto -c -k --keepParent "$RUNNER_TEMP/JustGit-package/JustGit.app" "$RUNNER_TEMP/JustGit-macOS-universal.zip"
+      - name: Package native disk images
+        run: |
+          version=$(sed -n 's/^VERSION="${JUSTGIT_VERSION:-\([^}]*\)}"/\1/p' Build.command)
+          for arch in arm64 x64; do
+            .github/scripts/package-macos.sh "$RUNNER_TEMP/JustGit-package/JustGit.app" "$version" "$arch" "$RUNNER_TEMP/downloads"
+          done
       - uses: actions/upload-artifact@v4
+        if: matrix.os == 'macos-15'
         with:
-          name: JustGit-macOS-universal-${{ matrix.os }}-${{ github.sha }}
-          path: ${{ runner.temp }}/JustGit-macOS-universal.zip
+          name: JustGit-macOS-${{ matrix.os }}-${{ github.sha }}
+          path: ${{ runner.temp }}/downloads/*.dmg
           if-no-files-found: error

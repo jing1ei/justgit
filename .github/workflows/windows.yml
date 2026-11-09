@@ -36,8 +36,16 @@ jobs:
         env:
           JUSTGIT_PYTHON: ${{ steps.python.outputs.python-path }}
         run: ./Windows/Build.ps1 -Package
+      - name: Build and verify installer
+        shell: pwsh
+        run: |
+          $dirs = @(Get-ChildItem Windows/releases -Directory)
+          if ($dirs.Count -ne 1) { throw 'Expected exactly one packaged app.' }
+          $version = (Select-String -Path Build.command -Pattern '^VERSION="\$\{JUSTGIT_VERSION:-([^}]+)\}"').Matches[0].Groups[1].Value
+          ./.github/scripts/package-windows.ps1 -Application JustGit -Version $version -Architecture x64 -SourceDirectory $dirs[0].FullName -OutputDirectory dist
       - uses: actions/upload-artifact@v4
+        if: matrix.os == 'windows-2022' && matrix.python == '3.12'
         with:
           name: JustGit-Windows-x64-${{ matrix.os }}-py${{ matrix.python }}-${{ github.sha }}
-          path: Windows/releases/
+          path: dist/*.exe
           if-no-files-found: error

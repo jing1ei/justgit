@@ -28,7 +28,7 @@ case "${1:-}" in
 esac
 
 # Release metadata. CI overrides these from the tag; local builds keep the defaults.
-VERSION="${JUSTGIT_VERSION:-1.0.1}"
+VERSION="${JUSTGIT_VERSION:-1.0.2}"
 BUILD_NUMBER="${JUSTGIT_BUILD:-1}"
 MIN_MACOS=11.0
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || die "JUSTGIT_VERSION must be numeric, such as 1.0.0."

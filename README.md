@@ -12,10 +12,23 @@ conflict recovery, and customizable light/dark themes.
 
 ![Changes in a sample repository](docs/screenshots/changes.png)
 
+## Download packages
+
+Choose the package for your computer from [GitHub Releases](https://github.com/jing1ei/justgit/releases/latest).
+
+| Computer | Package |
+| --- | --- |
+| Mac with Apple silicon | `JustGit-1.0.2-macOS-arm64.dmg` |
+| Mac with Intel | `JustGit-1.0.2-macOS-x64.dmg` |
+| Windows x64 | `JustGit-1.0.2-Windows-x64.exe` |
+
+On macOS, open the DMG and drag the app to Applications. On Windows, run the EXE installer.
+Each release includes one source ZIP and `SHA256SUMS.txt`.
+
 ## Get started
 
-1. Install Git. Open `JustGit.app` on Mac, or extract the full Windows download
-   and open `JustGit.exe`.
+1. Install Git. Open `JustGit.app` on Mac, or run the Windows EXE installer
+   and open JustGit from the Start menu.
 2. Choose **Add repository…** and select a local folder. For a new project,
    choose **Initialize repository**. Clone online repositories with Git first.
 3. Set your Git name and email in **Settings**.
