@@ -32,7 +32,7 @@ jobs:
           tag="${GITHUB_REF_NAME}"
           full="${tag#v}"
           core="${full%%-*}"
-          [[ "$core" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+          [[ "$full" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]] \
             || { echo "Tag must look like v1.2.3 (optionally with a -prerelease suffix)"; exit 1; }
           echo "version=$full" >> "$GITHUB_OUTPUT"
           echo "app-version=$core" >> "$GITHUB_OUTPUT"
