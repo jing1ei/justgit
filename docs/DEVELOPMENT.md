@@ -86,15 +86,15 @@ Tags look like `vMAJOR.MINOR.PATCH` (a two-component `v1.2` or a
 `v1.2.3-rc1` suffix is also accepted). On a tag push, GitHub Actions:
 
 1. Derives the bundle version from the tag (without the `v`).
-2. Builds, self-tests and packages the macOS universal app (`macos-15`),
+2. Builds and self-tests both Mac architectures, then packages separate arm64/x64 DMGs (`macos-15`),
    including `CompatibilityTests.sh` and `BuildTests.sh`.
-3. Builds, unit-tests, UI-smoke-tests and packages the Windows portable folder.
-4. Produces the `git archive` source zip.
+3. Builds, unit-tests and UI-smoke-tests the Windows payload, then verifies its EXE installer.
+4. Produces one `git archive` source ZIP and the consolidated SHA-256 manifest.
 5. Only if every platform job succeeds, creates the GitHub Release and attaches
    the three archives plus `SHA256SUMS.txt`.
 
 A failed build leaves no release behind (the publish job only runs once all
-builds pass). Re-running a tag's workflow updates the same release. A tag with a
+builds pass). An interrupted draft can be retried. Published versions are immutable. A tag with a
 prerelease suffix is published as a GitHub pre-release.
 
 The publish job is the only job granted `contents: write`; check jobs and
