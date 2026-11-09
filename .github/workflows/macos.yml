@@ -26,7 +26,7 @@ jobs:
         run: bash Tests/BuildTests.sh
       - name: Package native disk images
         run: |
-          version=$(sed -n 's/^VERSION="${JUSTGIT_VERSION:-\([^}]*\)}"/\1/p' Build.command)
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$RUNNER_TEMP/JustGit-package/JustGit.app/Contents/Info.plist")
           for arch in arm64 x64; do
             .github/scripts/package-macos.sh "$RUNNER_TEMP/JustGit-package/JustGit.app" "$version" "$arch" "$RUNNER_TEMP/downloads"
           done

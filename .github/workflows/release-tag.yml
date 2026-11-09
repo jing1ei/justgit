@@ -127,5 +127,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          export GITHUB_SHA="$(git rev-parse HEAD)"
+          GITHUB_SHA="$(git rev-parse HEAD)"
+          export GITHUB_SHA
           python .github/scripts/release.py dist --version "${{ needs.meta.outputs.version }}"
